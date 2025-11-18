@@ -24,7 +24,8 @@
   },
   "workspaces": [
     "reporters/vitest",
-    "reporters/jest"
+    "reporters/jest",
+    "reporters/storybook"
   ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -43,6 +44,7 @@
     "test": "vitest run --project default --project golangci-lint",
     "test:unit": "vitest run --project unit --project golangci-lint",
     "test:integration": "vitest run --project integration",
+    "pretest:reporters": "npx playwright install chromium --only-shell 2>/dev/null || true",
     "test:reporters": "vitest run --project reporters",
     "test:coverage": "vitest run --coverage",
     "lint": "npm run build:workspaces && eslint . --fix --report-unused-disable-directives --max-warnings 0",
@@ -89,5 +91,8 @@
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "js-yaml": "^4.1.1"
   }
 }

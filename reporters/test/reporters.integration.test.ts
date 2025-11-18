@@ -25,6 +25,7 @@ import {
   createPytestReporter,
   createGoReporter,
   createRustReporter,
+  createStorybookReporter,
 } from './factories'
 
 // Test data structure for each reporter
@@ -35,7 +36,14 @@ interface ReporterTestData {
   importErrorResults: unknown
 }
 
-type ReporterName = 'jest' | 'vitest' | 'phpunit' | 'pytest' | 'go' | 'rust'
+type ReporterName =
+  | 'jest'
+  | 'vitest'
+  | 'phpunit'
+  | 'pytest'
+  | 'go'
+  | 'rust'
+  | 'storybook'
 
 describe('Reporters', () => {
   const reporterData: ReporterTestData[] = []
@@ -49,12 +57,20 @@ describe('Reporters', () => {
       createPytestReporter(),
       createGoReporter(),
       createRustReporter(),
+      createStorybookReporter(),
     ]
 
-    // Run all reporters in parallel
-    const results = await Promise.all(reporters.map(runAllScenarios))
-    reporterData.push(...results)
-  }, 30000)
+    // Run all reporters in parallel, skipping any that fail (e.g., Rust not installed)
+    const results = await Promise.allSettled(reporters.map(runAllScenarios))
+    reporterData.push(
+      ...results
+        .filter(
+          (r): r is PromiseFulfilledResult<ReporterTestData> =>
+            r.status === 'fulfilled'
+        )
+        .map((r) => r.value)
+    )
+  }, 240000) // Increased timeout for all reporters (Storybook starts dev server + browser, others may be slower in containers)
 
   describe('Module Path Reporting', () => {
     describe('when assertions are passing', () => {
@@ -65,6 +81,7 @@ describe('Reporters', () => {
         { name: 'pytest', expected: 'test_single_passing.py' },
         { name: 'go', expected: 'singlePassing' },
         { name: 'rust', expected: 'single_passing' },
+        { name: 'storybook', expected: 'single-passing.stories' },
       ]
 
       it.each(reporters)('$name reports module path', ({ name, expected }) => {
@@ -81,6 +98,7 @@ describe('Reporters', () => {
         { name: 'pytest', expected: 'test_single_failing.py' },
         { name: 'go', expected: 'singleFailing' },
         { name: 'rust', expected: 'single_failing' },
+        { name: 'storybook', expected: 'single-failing.stories' },
       ]
 
       it.each(reporters)('$name reports module path', ({ name, expected }) => {
@@ -97,6 +115,7 @@ describe('Reporters', () => {
         { name: 'pytest', expected: 'test_single_import_error.py' },
         { name: 'go', expected: 'missingImport' },
         { name: 'rust', expected: 'compilation' },
+        { name: 'storybook', expected: 'single-import-error.stories' },
       ]
 
       it.each(reporters)('$name reports module path', ({ name, expected }) => {
@@ -124,6 +143,7 @@ describe('Reporters', () => {
           name: 'rust',
           expected: 'calculator_tests::should_add_numbers_correctly',
         },
+        { name: 'storybook', expected: 'play-test' },
       ]
 
       it.each(reporters)('$name reports test name', ({ name, expected }) => {
@@ -146,6 +166,7 @@ describe('Reporters', () => {
           name: 'rust',
           expected: 'calculator_tests::should_add_numbers_correctly',
         },
+        { name: 'storybook', expected: 'play-test' },
       ]
 
       it.each(reporters)('$name reports test name', ({ name, expected }) => {
@@ -168,6 +189,7 @@ describe('Reporters', () => {
         },
         { name: 'go', expected: 'CompilationError' },
         { name: 'rust', expected: 'build' },
+        { name: 'storybook', expected: 'play-test' },
       ]
 
       it.each(reporters)(
@@ -250,6 +272,10 @@ describe('Reporters', () => {
           expected:
             'single_failing::single_failing::calculator_tests::should_add_numbers_correctly',
         },
+        {
+          name: 'storybook',
+          expected: 'Calculator Primary play-test',
+        },
       ]
 
       it.each(reporters)(
@@ -278,6 +304,7 @@ describe('Reporters', () => {
         { name: 'pytest', expected: 'test_single_import_error.py' },
         { name: 'go', expected: 'missingImportModule/CompilationError' },
         { name: 'rust', expected: 'compilation::build' },
+        { name: 'storybook', expected: 'Calculator Primary play-test' },
       ]
 
       it.each(reporters)(
@@ -321,6 +348,7 @@ describe('Reporters', () => {
         'pytest',
         'go',
         'rust',
+        'storybook',
       ]
 
       it.each(reporters)('%s reports failing state', (reporter) => {
@@ -343,6 +371,7 @@ describe('Reporters', () => {
         { name: 'pytest', expected: 'failed' },
         { name: 'go', expected: 'failed' },
         { name: 'rust', expected: 'failed' },
+        { name: 'storybook', expected: 'failed' },
       ]
 
       it.each(reporters)(
@@ -383,6 +412,10 @@ describe('Reporters', () => {
           expected:
             "thread 'calculator_tests::should_add_numbers_correctly' panicked at src/lib.rs:12:9:",
         },
+        {
+          name: 'storybook',
+          expected: ['expected', '5', 'to be', '6'],
+        },
       ]
 
       it.each(reporters)(
@@ -415,6 +448,7 @@ describe('Reporters', () => {
         { name: 'pytest', expected: undefined },
         { name: 'go', expected: undefined },
         { name: 'rust', expected: '6' }, // Successfully extracts expected value
+        { name: 'storybook', expected: undefined },
       ]
 
       it.each(reporters)(
@@ -437,6 +471,7 @@ describe('Reporters', () => {
         { name: 'pytest', expected: undefined },
         { name: 'go', expected: undefined },
         { name: 'rust', expected: '5' }, // Successfully extracts actual value
+        { name: 'storybook', expected: undefined },
       ]
 
       it.each(reporters)(
@@ -483,6 +518,13 @@ describe('Reporters', () => {
           name: 'rust',
           expected: ['E0432', 'unresolved import', 'non_existent_module'],
         },
+        {
+          name: 'storybook',
+          expected: [
+            'Failed to fetch dynamically imported module',
+            'single-import-error.stories.js',
+          ],
+        },
       ]
 
       it.each(reporters)(
@@ -511,6 +553,7 @@ describe('Reporters', () => {
         { name: 'pytest', expected: undefined }, // TODO: Fix
         { name: 'go', expected: 'passed' },
         { name: 'rust', expected: 'passed' },
+        { name: 'storybook', expected: 'passed' },
       ]
 
       it.each(reporters)(
@@ -533,6 +576,7 @@ describe('Reporters', () => {
         { name: 'pytest', expected: undefined }, // TODO: Fix
         { name: 'go', expected: 'failed' },
         { name: 'rust', expected: 'failed' },
+        { name: 'storybook', expected: 'failed' },
       ]
 
       it.each(reporters)(
@@ -555,6 +599,7 @@ describe('Reporters', () => {
         { name: 'pytest', expected: undefined }, // TODO: Fix
         { name: 'go', expected: 'failed' },
         { name: 'rust', expected: 'failed' },
+        { name: 'storybook', expected: 'failed' },
       ]
 
       it.each(reporters)(
@@ -599,14 +644,22 @@ describe('Reporters', () => {
     scenario: 'passingResults' | 'failingResults' | 'importErrorResults',
     extractor: (data: unknown) => T
   ): Record<ReporterName, T | undefined> {
-    const [jest, vitest, phpunit, pytest, go, rust] = reporterData
+    const jest = reporterData.find((r) => r.name === 'JestReporter')
+    const vitest = reporterData.find((r) => r.name === 'VitestReporter')
+    const phpunit = reporterData.find((r) => r.name === 'PHPUnitReporter')
+    const pytest = reporterData.find((r) => r.name === 'PytestReporter')
+    const go = reporterData.find((r) => r.name === 'GoReporter')
+    const rust = reporterData.find((r) => r.name === 'RustReporter')
+    const storybook = reporterData.find((r) => r.name === 'StorybookReporter')
+
     return {
-      jest: safeExtract(jest[scenario], extractor),
-      vitest: safeExtract(vitest[scenario], extractor),
-      phpunit: safeExtract(phpunit[scenario], extractor),
-      pytest: safeExtract(pytest[scenario], extractor),
-      go: safeExtract(go[scenario], extractor),
-      rust: safeExtract(rust[scenario], extractor),
+      jest: safeExtract(jest?.[scenario], extractor),
+      vitest: safeExtract(vitest?.[scenario], extractor),
+      phpunit: safeExtract(phpunit?.[scenario], extractor),
+      pytest: safeExtract(pytest?.[scenario], extractor),
+      go: safeExtract(go?.[scenario], extractor),
+      rust: safeExtract(rust?.[scenario], extractor),
+      storybook: safeExtract(storybook?.[scenario], extractor),
     }
   }
 
@@ -674,7 +727,7 @@ async function runReporter(
     const storage = new FileStorage(tddConfig)
 
     // Run the test for the given scenario
-    reporter.run(tempDir, scenario)
+    await reporter.run(tempDir, scenario)
 
     // Get saved test data
     const savedData = await storage.getTest()
